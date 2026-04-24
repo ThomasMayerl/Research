@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>ETAPS 2026</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head>
+  <body>
+    <main>
+      <div class="container">
+        <header class="d-flex justify-content-center py-3">
+          <ul class="nav nav-pills">
+            <li class="nav-item">
+              <a href="https://mayerl.ch" class="nav-link">
+                Home
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="https://research.mayerl.ch" class="nav-link active" aria-current="page">
+                Research
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="https://photography.mayerl.ch" class="nav-link">
+                Photography
+              </a>
+            </li>
+          </ul>
+        </header>
+        </div>
+        <div class="container">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb breadcrumb-chevron p-3 bg-body-tertiary rounded-3">
+                    <li class="breadcrumb-item"><a class="link-body-emphasis" href="../index.html">
+                        <i class="bi bi-house-door-fill" area-hidden="true"></i>
+                    </a></li>
+                    <li class="breadcrumb-item"><a class="link-body-emphasis fw-semibold text-decoration-none" href="../blog.html">Research Blog</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">ETAPS 2026
+                    </li>
+                </ol>
+            </nav>
+        </div>
+        <div class="container">
+            <strong class="d-inline-block mb-2 text-primary-emphasis">Conferences / Events</strong>
+            <h1>ETAPS 2026</h1>
+            <div class="mb-1 text-body-secondary">24 April 2026</div>
+            <div class="mb-1 text-body-primary"><p class="card-text mb-auto">In April, I went to ETAPS 2026 to attend VerifyThis and the Rust Verification Workshop. In this post, I'll focus on writing about my experiences going to VerifyThis 2026. I do not know yet if I'm also going to write a post about the Rust Verification Workshop.</p></div>
+            <div class="mb-1 text-body-primary">
+                <h2>VerifyThis 2026</h2>
+                <p class="card-text mb-auto">VerifyThis is a competition where competitors receive four challenges that contain a verification task. I took part in the competition in a team with Jack, another PhD student. 
+                    Even though VerifyThis calls itself a competition, I would not see it as such. VerifyThis is a great place to learn more about how to verify real-world code. It also shows how a verification tool should be adapted to be able to handle real-world code. Even though we participated with Viper, I plan to use Prusti for next year and made multiple realisations.
+                </p>
+            </div>
+            <div class="mb-1 text-body-primary">
+                <h3>General verification skills</h3>
+                <p class="card-text mb-auto">
+                    When it comes to general verification skills, I mainly learned how to model concurrency with locks in a separation-logic based language. Locks can be seen as further resources. 
+                    These resources contain the underlying permissions. For example, let's assume that we have some integer that can only be read by or written to by one thread at a time.
+                    Therefore, the lock would contain permission to access the integer. In Viper, this would be implemented as a predicate, roughly written as follows:</p>
+                    <pre>
+field val: Int
+
+predicate Lock(addr: Ref) {
+    acc(addr.val)
+}
+                    </pre>
+                <p class="card-text mb-auto">
+                    Before we can spawn multiple threads, we need to make sure that we actually have access to the data we want to lock. In Viper, we can do this by folding the predicate.
+                </p>
+                <pre>
+// create data
+var sharedData: Ref := new(val)
+// lock data
+fold Lock(sharedData)
+// give up permission - make Lock available to threads
+exhale Lock(sharedData)
+                </pre>
+                <p class="card-text mb-auto">
+When we now assume to have multiple threads, acquiring a lock can be seen as inhaling that permission. 
+                </p>
+<pre>
+// acquire lock
+inhale Lock(sharedData)
+// access data
+unfold Lock(sharedData)
+</pre>
+                <p class="card-text mb-auto">
+                    Why does this work? This works because only one place can hold full permissions to a Separation Logic resource at a time. Since the current thread holds full permission, we can assume that no other thread can also have full permission. 
+                    The <code>inhale</code> is sound because we made sure to <code>exhale</code> the lock directly after creating it. The <code>inhale</code> of a permission therefore models the acquiring (including a potential wait until the lock is available) of the lock.
+                    To release a lock, we basically do it the inverse way: We first need to prove that we still hold access to the data that is locked (by folding the predicate) and then exhaling the lock.
+                </p>
+<pre>
+fold Lock(sharedData)
+exhale Lock(sharedData)
+</pre>
+                <p class="card-text mb-auto">Prusti is more high-level than Viper. Therefore, we cannot just inhale and exhale permissions. We also do not have the option to define predicates. However, what we can do is model the lock as a struct. The struct contains a raw pointer to the actual data. The struct then implements two functions: One for acquiring and one for releasing the lock. When we acquire the lock, the acquire function shall ensure that we get access to the location through the raw pointer. The release function then does the opposite. </p><br>
+                <p class="card-text mb-auto">Except for locking, I could also see that it is crucial to first understand what we want to model before starting to code. I think that this was one of the issues that degraded our performance: We started to code before we even tried to understand what we need to do. That said, it's all a big learning experience, and for me this was valuable experience. </p>
+                <p class="card-text mb-auto">One more thing that I learned is related to finding a good model: One should try to find points where it's possible to make verification easier. For example, in one challenge we had to model memory allocation. Bytes in memory are never read alone. Therefore, the naive idea of just encoding the entire memory as a sequence of bytes is over-complicated. As we need to also read full addresses from the memory (modelling page tables) and parse those, it makes sense to treat the memory as a sequence of <i>pages</i> (since a page is the smallest entity that we can read/write). A page then consists of multiple 32 Bit unsized integers (since the instructions were about a 32 Bit machine; addresses are 32 Bit wide).</p>
+                <p class="card-text mb-auto">Another lesson-learned is that one should really pay attention to defining invariants: For the challenge with the page tables, it would have been more useful to first focus on defining the invariant: Properties about the machine that <i>always</i> need to hold. We can then structure the proof into two parts: Proving that the invariant always holds, and proving that the actual properties hold if the invariant holds. This greatly eases proving the properties and it also makes it easier to see what we actually want to prove.</p>
+            </div>
+            <div class="mb-1 text-body-primary">
+                <h3>Prusti</h3>
+                <p class="card-text mb-auto">I decided to not use Prusti for this year's edition of VerifyThis because we are still in the process of completely rewriting Prusti to a new version. However, that's the beauty about VerifyThis: It shows what a tool needs to support to be able to verify real world code. I therefore set it as my personal goal for this year to write the challenges from this year's VerifyThis in Prusti and to get Prusti to a point, so that it can verify these programs. I then want to compete with Prusti next year. Prusti, as a Rust verifier, has one major advantage over other tools: After writing the code in Rust, we get the memory-safety proof "for free" because of Rust's ownership type system. We can therefore directly go to verifying correctness properties. In case, the program needs parts to be written in Unsafe Rust, this is one of the advantages that Prusti uses separation logic: We can also reason about Unsafe Rust - at least that's what I'm currently working on ;)</p>
+            </div>
+            <div class="mb-1 text-body-primary">
+                <h3>Results</h3>
+                <p class="card-text mb-auto">Nevertheless, VerifyThis is still a competition. So, how did we do? Well, I didn't go into the competition expecting to win anything as a first year PhD student, nor did we. That said, I think we still did pretty well. We made quite some progress in most of the challenges. We even attempted a challenge that noone else tried to tackle. For that, we even got an unofficial award (<tt>Most Daring Team</tt>) from the organisers.</p>
+            </div>
+            <div class="mb-1 text-body-primary">
+                <h3>Concluding words</h3>
+                <p class="card-text mb-auto">All in all, VerifyThis was tons of fun and I am glad that I could attend. I want to thank Jack for being my team-mate and the organisers for the great organisation! I am looking forward to next year &#128516;</p>
+            </div>
+                </div>
+        </div>
+    </main>
+</body>
+</html>
